@@ -1,0 +1,36 @@
+# Mock de votre API, servi directement depuis votre contrat, avec sa documentation.
+#
+# Démarrer :  docker compose up
+# Puis :      http://localhost:4010  (Bruno, curl, navigateur...)
+#             http://localhost:4011  (votre contrat, rendu lisible)
+#
+# Prism surveille votre contrat : modifiez openapi.yaml, rejouez la requête,
+# le mock a déjà changé. Pas besoin de redémarrer.
+
+services:
+  mock:
+    image: stoplight/prism:5
+    # -h 0.0.0.0 : sans ça, Prism n'écoute qu'à l'intérieur du conteneur
+    #              et reste injoignable depuis votre machine.
+    # -m false   : le mode multiprocess de Prism est cassé sur cette image
+    #              (le conteneur s'arrête aussitôt en affichant son aide).
+    command: mock -h 0.0.0.0 -m false /tmp/openapi.yaml
+    volumes:
+      # On monte le DOSSIER, pas le fichier seul. Un montage de fichier est
+      # résolu vers son inode, que votre éditeur remplace à l'enregistrement :
+      # le conteneur continuerait de voir l'ancienne version, et vos
+      # modifications n'atteindraient jamais le mock.
+      - .:/tmp:ro
+    ports:
+      - "4010:4010"
+
+  docs:
+    image: swaggerapi/swagger-ui:v5.32.11
+    environment:
+      # le fichier est cherché dans le conteneur, à ce chemin exact
+      SWAGGER_JSON: /openapi/openapi.yaml
+    volumes:
+      # même montage de DOSSIER que le mock, pour la même raison
+      - .:/openapi:ro
+    ports:
+      - "4011:8080"

@@ -1,0 +1,515 @@
+openapi: 3.1.0
+
+info:
+  title: CATAPULTE Connect API
+  version: 1.0.0
+  summary: Billetterie du réseau national de catapultes.
+  description: |
+    API de **CATAPULTE Connect**, la billetterie grand public du réseau de catapultes
+    exploité par l'**Office National des Trajectoires Balistiques (ONTB)**.
+
+    Le transport par catapulte est silencieux, sans moteur et panoramique. Chaque ville
+    du réseau dispose d'une catapulte unique, dressée en son centre : on ne voyage donc
+    pas de gare à gare mais **de ville à ville**. Une catapulte vise sa cible et lance —
+    tous les trajets sont **directs**, sans escale ni correspondance.
+
+    ## Parcours
+
+    La découverte du réseau (villes, trajets) est **publique** : on cherche librement.
+    La réservation exige un compte : c'est au moment de créer un panier que
+    l'authentification devient nécessaire.
+
+    ```
+    recherche -> résultats -> détail -> [connexion] -> panier -> paiement -> billets
+    ```
+
+    ## Conventions
+
+    - Les réponses de liste sont des **tableaux nus**, sans enveloppe ni métadonnées.
+    - Toutes les erreurs sont servies en `application/problem+json` (RFC 7807).
+    - Les durées sont en **minutes**. Les montants sont en euros.
+  contact:
+    name: ONTB — Direction des Systèmes de Lancement
+    email: api@ontb.example
+  license:
+    name: Usage pédagogique
+    identifier: CC-BY-NC-SA-4.0
+
+servers:
+  - url: http://localhost:4010
+    description: Mock local (Prism)
+  - url: https://api.catapulte-connect.ontb.example/v1
+    description: Production (fictive)
+
+tags:
+  - name: Authentification
+    description: Création de compte et obtention des jetons. Public.
+  - name: Compte
+    description: Profil du voyageur et billets détenus.
+  - name: Découverte
+    description: Villes desservies et recherche de lancers. Public.
+  - name: Panier
+    description: Composition et paiement d'une réservation.
+
+# Sécurité par défaut : tout est protégé. Les opérations publiques
+# lèvent explicitement cette contrainte avec `security: []`.
+security:
+  - bearerAuth: []
+
+paths:
+  # ==========================================================================
+  #  FOURNI — Authentification et profil
+  #
+  #  Ces quatre opérations sont écrites. Elles ne sont pas là pour être
+  #  recopiées, mais pour servir de référence : tout ce dont vous avez besoin
+  #  pour écrire le reste s'y trouve déjà au moins une fois.
+  #
+  #  Allez y chercher : comment on déclare un body, comment on référence un
+  #  schéma, comment on ouvre une opération au public, comment on décrit une
+  #  réponse d'erreur, comment on documente un paramètre.
+  # ==========================================================================
+
+  /auth/register:
+    post:
+      tags: [Authentification]
+      operationId: register
+      summary: Ouvrir un dossier voyageur
+      description: |
+        Crée un compte. L'ONTB ne vérifie pas l'adresse e-mail : la responsabilité
+        de sa validité incombe au voyageur, conformément au règlement en vigueur.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Dossier voyageur ouvert.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: Un dossier existe déjà pour cette adresse.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: 'https://api.catapulte-connect.ontb.example/errors/email-taken'
+                title: Adresse déjà enregistrée
+                status: 409
+                detail: Un dossier voyageur existe déjà pour bob@example.com.
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /auth/login:
+    post:
+      tags: [Authentification]
+      operationId: login
+      summary: Se connecter
+      description: |
+        Authentifie un voyageur et délivre deux jetons : un jeton d'accès, à présenter
+        à chaque appel protégé, et un jeton de renouvellement, qui permet d'en obtenir
+        un nouveau sans ressaisir son mot de passe.
+
+        L'ONTB ne propose pas de déconnexion : un jeton d'accès expire de lui-même au
+        bout d'une heure.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Jetons délivrés.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: Identifiants invalides.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: 'https://api.catapulte-connect.ontb.example/errors/invalid-credentials'
+                title: Identifiants invalides
+                status: 401
+                detail: Adresse e-mail ou mot de passe incorrect.
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /auth/refresh:
+    post:
+      tags: [Authentification]
+      operationId: refreshToken
+      summary: Renouveler le jeton d'accès
+      description: |
+        Échange un jeton de renouvellement encore valide contre un nouveau jeton d'accès.
+        Évite de redemander son mot de passe au voyageur toutes les heures.
+
+        Le jeton de renouvellement, lui, n'est pas renouvelé : au bout de 30 jours, il
+        faut repasser par `/auth/login`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Nouveau jeton d'accès délivré.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accessToken]
+                properties:
+                  accessToken:
+                    type: string
+                    description: Jeton d'accès, valable 1 heure.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: Jeton de renouvellement invalide ou expiré.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /users/me:
+    get:
+      tags: [Compte]
+      operationId: getCurrentUser
+      summary: Consulter son dossier voyageur
+      description: |
+        Retourne le dossier du voyageur connecté, identifié par son jeton d'accès.
+
+        Il n'existe pas d'opération pour consulter le dossier d'un autre voyageur : le
+        jeton désigne le titulaire, aucun identifiant ne circule dans le chemin.
+      responses:
+        '200':
+          description: Dossier du voyageur connecté.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ==========================================================================
+  #  À VOUS — Le flux de réservation
+  #
+  #  Tout ce qui suit est à écrire. Le contrat métier distribué en fin de J2
+  #  fait foi : c'est lui qui dit quelles opérations existent, ce qu'elles
+  #  reçoivent et ce qu'elles renvoient. Les indications ci-dessous ne sont
+  #  que des repères — elles ne remplacent pas le contrat métier.
+  #
+  #  Deux choses à ne pas perdre de vue :
+  #    - Le mock tourne déjà (`docker compose up`). Écrivez une opération,
+  #      rejouez-la dans Bruno, voyez ce qui sort. N'attendez pas la fin.
+  #    - `spectral lint openapi.yaml` doit rester vert. Si le linter râle,
+  #      corrigez tout de suite : une erreur en cache trois.
+  # ==========================================================================
+
+  # ---- Découverte (public) -------------------------------------------------
+
+  # GET /cities
+  #   Rechercher une ville desservie, par filtre textuel.
+  #   Chaque ville du réseau possède une catapulte unique en son centre.
+  #   Opération PUBLIQUE : on cherche sans être connecté.
+
+  # POST /trips/search
+  #   Rechercher les lancers reliant deux villes à une date donnée, pour un
+  #   nombre de places. Tous les lancers sont directs : aucune correspondance,
+  #   aucun itinéraire composé. Sans lancer direct ce jour-là, la liste est vide.
+  #   Opération PUBLIQUE.
+
+  # GET /trips/{id}
+  #   Consulter le détail d'un lancer. Le détail porte ce qu'une liste de
+  #   résultats n'a aucune raison de transporter pour chacune de ses lignes.
+  #   Opération PUBLIQUE.
+
+  # ---- Panier (authentifié) ------------------------------------------------
+
+  # POST /carts
+  #   Ouvrir un panier vide. C'est ici que la connexion devient nécessaire :
+  #   la découverte est libre, la réservation est nominative.
+
+  # GET /carts
+  #   Récupérer le panier actif du voyageur connecté. Un voyageur n'a qu'un
+  #   panier actif à la fois — et parfois aucun, ce qui est un état normal
+  #   et non une erreur. Réfléchissez à ce que ça implique pour la réponse.
+
+  # POST /carts/{id}/items
+  #   Ajouter un lancer au panier, avec un nombre de places.
+  #   L'écran de panier doit pouvoir se peindre à partir de cette seule
+  #   réponse, sans second appel. Le total est calculé par le serveur.
+
+  # DELETE /carts/{id}/items/{itemId}
+  #   Retirer une ligne du panier. Si c'était la dernière, le panier disparaît
+  #   côté serveur — le voyageur n'a rien à faire de plus.
+
+  # POST /carts/{id}/pay
+  #   Payer le panier : il passe de `pending` à `paid` et les billets sont
+  #   émis, un par place réservée. Aucune donnée bancaire ne circule : on
+  #   déclare un moyen de paiement, rien de plus.
+  #   L'écran de confirmation doit pouvoir se peindre à partir de cette seule
+  #   réponse. Que se passe-t-il si le panier est déjà payé ?
+
+  # ---- Billets (authentifié) -----------------------------------------------
+
+  # GET /tickets
+  #   Lister les billets du voyageur connecté. Un billet est un droit à
+  #   embarquer sur un lancer : il n'est pas nominatif, il vaut pour une
+  #   place et non pour une personne désignée.
+
+components:
+  # ==========================================================================
+  #  FOURNI — Sécurité, erreurs, et schémas de l'authentification
+  #
+  #  Le schéma de sécurité et le format d'erreur sont posés : ils valent pour
+  #  toute l'API, y compris pour les opérations que vous allez écrire.
+  #  Servez-vous en (`$ref`), ne les redéfinissez pas.
+  # ==========================================================================
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Jeton d'accès obtenu via `/auth/login`, à présenter en en-tête :
+        `Authorization: Bearer <accessToken>`. Durée de validité : 1 heure.
+        Passé ce délai, `/auth/refresh` en délivre un nouveau.
+
+  responses:
+    BadRequest:
+      description: Corps de requête illisible (JSON malformé).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'about:blank'
+            title: Bad Request
+            status: 400
+            detail: Syntax error in JSON body.
+
+    Unauthorized:
+      description: Authentification requise ou jeton invalide/expiré.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'about:blank'
+            title: Unauthorized
+            status: 401
+            detail: Jeton d'accès absent, invalide ou expiré.
+
+    Forbidden:
+      description: La ressource appartient à un autre voyageur.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'https://api.catapulte-connect.ontb.example/errors/not-owner'
+            title: Accès refusé
+            status: 403
+            detail: Ce panier appartient à un autre dossier voyageur.
+
+    NotFound:
+      description: Ressource introuvable.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: 'about:blank'
+            title: Not Found
+            status: 404
+            detail: Aucune ressource ne correspond à cet identifiant.
+
+    ValidationError:
+      description: |
+        Le corps est syntaxiquement valide mais une ou plusieurs valeurs sont refusées.
+        À distinguer du `400`, qui signale un JSON illisible.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblem'
+          example:
+            type: 'https://api.catapulte-connect.ontb.example/errors/validation'
+            title: Données invalides
+            status: 422
+            detail: 1 champ est en erreur.
+            violations:
+              - propertyPath: passengers
+                message: Le nombre de places doit être supérieur ou égal à 1.
+
+  schemas:
+    # ------------------------------------------------------------ Erreurs (RFC 7807)
+    Problem:
+      type: object
+      description: |
+        Format d'erreur normalisé par la **RFC 7807** (`application/problem+json`).
+        Toutes les réponses d'erreur de l'API suivent ce schéma.
+      required: [title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          default: 'about:blank'
+          description: URI identifiant le type d'erreur. `about:blank` quand le statut HTTP suffit à la décrire.
+        title:
+          type: string
+          description: Résumé court et stable du problème. Ne varie pas d'une occurrence à l'autre.
+        status:
+          type: integer
+          description: Code de statut HTTP, répété ici pour les clients qui ne lisent que le corps.
+        detail:
+          type: string
+          description: Explication spécifique à **cette** occurrence.
+        instance:
+          type: string
+          format: uri
+          description: URI de la ressource concernée.
+
+    ValidationProblem:
+      description: Erreur de validation — un `Problem` enrichi du détail des champs fautifs.
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            violations:
+              type: array
+              description: Liste des champs en faute.
+              items:
+                type: object
+                required: [propertyPath, message]
+                properties:
+                  propertyPath:
+                    type: string
+                    description: Chemin du champ fautif dans le corps envoyé.
+                  message:
+                    type: string
+                    description: Raison du rejet, lisible par un humain.
+
+    # ------------------------------------------------------------ Auth
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: bob@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: correct-horse-battery-staple
+        firstName:
+          type: string
+          example: Bob
+        lastName:
+          type: string
+          example: Morane
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: bob@example.com
+        password:
+          type: string
+          format: password
+          example: correct-horse-battery-staple
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    TokenPair:
+      type: object
+      required: [accessToken, refreshToken]
+      properties:
+        accessToken:
+          type: string
+          description: Jeton d'accès, valable 1 heure.
+        refreshToken:
+          type: string
+          description: Jeton de renouvellement, valable 30 jours.
+
+    User:
+      type: object
+      description: Dossier voyageur. `firstName` et `lastName` sont facultatifs.
+      required: [id, email, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+        email:
+          type: string
+          format: email
+          example: bob@example.com
+        firstName:
+          type: string
+          example: Bob
+        lastName:
+          type: string
+          example: Morane
+        createdAt:
+          type: string
+          format: date-time
+          example: '2027-02-14T10:03:00Z'
+
+    # ==========================================================================
+    #  À VOUS — Les schémas du flux de réservation
+    #
+    #  Les entités ci-dessous sont à définir. On vous donne ce qu'elles sont,
+    #  pas ce qu'elles contiennent : le contrat métier de J2 porte les champs,
+    #  à vous de les traduire en schémas.
+    #
+    #  Quelques questions qui valent d'être posées avant d'écrire :
+    #    - Qu'est-ce qui est obligatoire, qu'est-ce qui est facultatif ?
+    #    - Deux schémas se ressemblent-ils au point que l'un compose l'autre ?
+    #    - Une valeur n'a-t-elle qu'un jeu de possibilités connu d'avance ?
+    # ==========================================================================
+
+    # City
+    #   Une ville desservie. Chaque ville possède une catapulte unique en son
+    #   centre, qui sert à la fois de point de lancement et de réception.
+
+    # TripSummary
+    #   Un lancer tel qu'il apparaît dans une liste de résultats : de quoi
+    #   choisir, pas de quoi préparer son voyage.
+
+    # TripDetail
+    #   Le même lancer, consulté seul. Il ajoute ce dont on a besoin une fois
+    #   qu'on l'a choisi — notamment la franchise de masse, qui n'est pas ici
+    #   une limite commerciale mais balistique.
+
+    # Cart
+    #   Un panier de réservation. Il connaît son état, ses lignes, et son total.
+
+    # CartItem
+    #   Une ligne de panier : un lancer et un nombre de places.
+
+    # Ticket
+    #   Un droit à embarquer sur un lancer, émis au paiement. Un par place.

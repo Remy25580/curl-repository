@@ -1,0 +1,37 @@
+# Mock local du Train Travel API, servi depuis le contrat fourni, avec sa documentation.
+#
+# Démarrer :  docker compose up
+# Puis :      http://localhost:4010  (l'API — Bruno, curl, navigateur...)
+#             http://localhost:4011  (la documentation du contrat, lisible)
+#
+# C'est une API d'exemple, déjà conçue : vous tapez dessus pour prendre Bruno
+# en main. Prism la sert en local — pas de dépendance à un mock hébergé.
+
+services:
+  mock:
+    image: stoplight/prism:5
+    # -h 0.0.0.0 : sans ça, Prism n'écoute qu'à l'intérieur du conteneur
+    #              et reste injoignable depuis votre machine.
+    # -m false   : le mode multiprocess de Prism est cassé sur cette image
+    #              (le conteneur s'arrête aussitôt en affichant son aide).
+    command: mock -h 0.0.0.0 -m false /tmp/openapi.yaml
+    volumes:
+      # On monte le DOSSIER entier, pas les fichiers un par un. Deux raisons :
+      # le contrat externalise une description dans docs/ (un $ref vers un
+      # fichier voisin), qui doit être monté lui aussi ; et un montage de
+      # fichier est résolu vers son inode, donc les modifications faites
+      # depuis votre machine n'atteindraient pas le conteneur.
+      - .:/tmp:ro
+    ports:
+      - "4010:4010"
+
+  docs:
+    image: swaggerapi/swagger-ui:v5.32.11
+    environment:
+      # le fichier est cherché dans le conteneur, à ce chemin exact
+      SWAGGER_JSON: /spec/openapi.yaml
+    volumes:
+      # même montage de DOSSIER que le mock, pour la même raison
+      - .:/spec:ro
+    ports:
+      - "4011:8080"
