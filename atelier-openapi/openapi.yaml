@@ -293,9 +293,9 @@ paths:
           content:
             application/json:
               schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/TripSummary'
+                type: array
+                items:
+                  $ref: '#/components/schemas/TripSummary'
         '400': { $ref: '#/components/responses/BadRequest' }
         '422': { $ref: '#/components/responses/ValidationError' }
 
@@ -313,7 +313,8 @@ paths:
           in: path
           required: true
           schema:
-            type: uuid
+            type: string
+          example: 0e1f2e9b4c5d-8c9d-4a7b-5e6f-1a2b3c4d
       security: []
       responses:
         '200':
@@ -321,7 +322,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schema/TripDetail'
+                $ref: '#/components/schemas/TripDetail'
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationError' }
@@ -354,10 +355,17 @@ paths:
       responses:
         '200':
           description: Panier de l'utilisateur connecté
-          constent:
+          content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Cart'
+                example: {
+                  "id": "0e1f2a3b4c5d-8c9d-4a7b-5e67-1a2b3c4d",
+                  "status": "pending",
+                  "lines": [],
+                  "totalPrice": 0,
+                  "openingDate": "2027-02-14T10:03:00Z"
+                }
         '401': { $ref: '#/components/responses/Unauthorized' }
         
   /carts/{id}/items:
@@ -374,7 +382,8 @@ paths:
           in: path
           required: true
           schema:
-            type: uuid
+            type: string
+          example: 0e1f2a3b4c5d-8c9d-4a7b-5e67-1a2b3c4d
       requestBody:
         required: true
         content:
@@ -410,12 +419,14 @@ paths:
           in: path
           required: true
           schema:
-            type: uuid
+            type: string
+          example: 0e1f2a3b4c5d-8c9d-4a7b-5e67-1a2b3c4d
         - name: itemId
           in: path
           required: true
           schema:
-            type: uuid
+            type: string
+          example: 1a2cv34d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
       responses:
         '204':
           description: Le lancer a été retiré du panier.
@@ -440,7 +451,8 @@ paths:
           in: path
           required: true
           schema:
-            type: uuid
+            type: string
+          example: 0e1f2a3b4c5d-8c9d-4a7b-5e67-1a2b3c4d
       requestBody:
         required: true
         content:
@@ -453,7 +465,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schema/PayResponse'
+                $ref: '#/components/schemas/PayResponse'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/schemas/Unauthorized' }
         '403': { $ref: '#/components/schemas/Forbidden' }
@@ -741,6 +753,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/TripSummary'
         - type: object
+          required: [massFranchising, catapultModel, boardingInstructions]
           properties:
             massFranchising:
               type: integer
