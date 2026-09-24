@@ -342,7 +342,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Cart'
-        '401': { $ref: '#/components/schemas/Unauthorized' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
     get:
       tags: [Panier]
@@ -398,8 +398,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Cart'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/schemas/Unauthorized' }
-        '403': { $ref: '#/components/schemas/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationError' }
 
@@ -431,8 +431,8 @@ paths:
         '204':
           description: Le lancer a été retiré du panier.
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/schemas/Unauthorized' }
-        '403': { $ref: '#/components/schemas/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationError' }
 
@@ -467,8 +467,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/PayResponse'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/schemas/Unauthorized' }
-        '403': { $ref: '#/components/schemas/Forbidden' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationError' }
 
@@ -492,7 +492,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Ticket'
-        '401': { $ref: '#/components/schemas/Unauthorized' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
 components:
 
