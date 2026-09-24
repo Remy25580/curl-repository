@@ -218,66 +218,271 @@ paths:
   #      corrigez tout de suite : une erreur en cache trois.
   # ==========================================================================
 
-  # ---- Découverte (public) -------------------------------------------------
+  /cities:
+    get:
+      tags: [Découverte]
+      operationId: getCities
+      summary: Consulter les villes désservies par Catapulte Connect
+      description: Renvoie les différentes villes disponibles via le réseau de Catapulte depuis lesquelles un voyageur pourra partir ou bien auxquelles il pourra atterrir.
+      parameters:
+        - name: search
+          in: query
+          required: false
+          description: Filtre des villes par nom
+          schema:
+            type: string
+          example: mar
+        - name: limit
+          in: query
+          required: false
+          description: Nombre maximum de villes retournées.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      security: []
+      responses:
+        '200':
+          description: Liste des villes disponibles et correspondant au filtre de recherche. Tableau vide si aucune ville ne correspond.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/City'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '422': { $ref: '#/components/responses/ValidationError' }
 
-  # GET /cities
-  #   Rechercher une ville desservie, par filtre textuel.
-  #   Chaque ville du réseau possède une catapulte unique en son centre.
-  #   Opération PUBLIQUE : on cherche sans être connecté.
+  /trips/search:
+    post:
+      tags: [Découverte]
+      operationId: searchTrip
+      summary: Rechercher un lancer
+      description: |
+        Rechercher un lancer reliant une ville de départ à une ville d'arrivée
+        à une date donnée et pour un certain nombre de places.Tous les lancers sont
+        directs : aucune correspondance, aucun itinéraire composé. Sans lancer
+        direct ce jour-là, la liste est vide.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [beginning, ending, date, passengers]
+              properties:
+                beginning:
+                  type: string
+                  example: Paris
+                ending:
+                  type: string
+                  example: Brest
+                date:
+                  type: string
+                  format: date
+                  example: '2027-02-14'
+                passengers:
+                  type: integer
+                  minimum: 1
+                  example: 2
+      responses:
+        '200':
+          description: Résultat de la recherche de lancers envoyé.
+          content:
+            application/json:
+              schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/TripSummary'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '422': { $ref: '#/components/responses/ValidationError' }
 
-  # POST /trips/search
-  #   Rechercher les lancers reliant deux villes à une date donnée, pour un
-  #   nombre de places. Tous les lancers sont directs : aucune correspondance,
-  #   aucun itinéraire composé. Sans lancer direct ce jour-là, la liste est vide.
-  #   Opération PUBLIQUE.
+  /trips/{id}:
+    get:
+      tags: [Découverte]
+      operationId: getSingleTrip
+      summary: Consulter le détail d'un lancer
+      description: |
+        Renvoie les informations détaillées d'un lancer après avoir cliqué dessus,
+        incluant sa franchise de masse, son modèle de catapulte ainsi que ses
+        consignes d'embarquement.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: uuid
+      security: []
+      responses:
+        '200':
+          description: Les détails concernants le lancer séléctionné.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schema/TripDetail'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
 
-  # GET /trips/{id}
-  #   Consulter le détail d'un lancer. Le détail porte ce qu'une liste de
-  #   résultats n'a aucune raison de transporter pour chacune de ses lignes.
-  #   Opération PUBLIQUE.
+  /carts:
+    post:
+      tags: [Panier]
+      operationId: createCart
+      summary: Ouvrir un panier
+      description: |
+        Ouvre un panier pour vide pour l'utilisateur.
+        L'utilisateur doit être connecté pour ouvrir un panier.
+      responses:
+        '201':
+          description: Nouveau panier ouvert.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '401': { $ref: '#/components/schemas/Unauthorized' }
 
-  # ---- Panier (authentifié) ------------------------------------------------
+    get:
+      tags: [Panier]
+      operationId: getCart
+      summary: Consulter son panier
+      description: |
+        Retourne le contenu du panier en cours de l'utilisateur connecté.
+        L'utilisateur doit être connecté pour consulter son panier.
+        L'utilisateur ne peut pas consulter un autre panier que le sien.
+      responses:
+        '200':
+          description: Panier de l'utilisateur connecté
+          constent:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        
+  /carts/{id}/items:
+    post:
+      tags: [Panier]
+      operationId: addToCart
+      summary: Ajouter un lancer à son panier
+      description: |
+        Ajoute un lancer au panier de l'utilisateur.
+        L'utilisateur doit être connecté pour ajouter un lancer à son panier.
+        L'utilisateur ne peut ajouter un lancer qu'à son propre panier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartItem'
+      responses:
+        '200':
+          description: Le panier de l'utilisateur avec le nouveau lancer ajouté.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/schemas/Unauthorized' }
+        '403': { $ref: '#/components/schemas/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
 
-  # POST /carts
-  #   Ouvrir un panier vide. C'est ici que la connexion devient nécessaire :
-  #   la découverte est libre, la réservation est nominative.
+  /carts/{id}/items/{itemId}:
+    delete:
+      tags: [Panier]
+      operationId: deleteCartItem
+      summary: Retirer un lancer de son panier
+      description: |
+        Retire un lancer du panier de l'utilisateur. Si le dit lancer était
+        le dernier, le panier disparait.
+        L'utilisateur doit être connecté pour supprimer un lancer de son panier.
+        L'utilisateur ne peut pas supprimer de lancer d'un autre panier que le
+        sien.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: uuid
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: uuid
+      responses:
+        '204':
+          description: Le lancer a été retiré du panier.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/schemas/Unauthorized' }
+        '403': { $ref: '#/components/schemas/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
 
-  # GET /carts
-  #   Récupérer le panier actif du voyageur connecté. Un voyageur n'a qu'un
-  #   panier actif à la fois — et parfois aucun, ce qui est un état normal
-  #   et non une erreur. Réfléchissez à ce que ça implique pour la réponse.
+  /carts/{id}/pay:
+    post:
+      tags: [Panier]
+      operationId: payCart
+      summary: Payer son panier
+      description: |
+        Permet à l'utilisateur de payer les lancers qu'il a enregistré dans
+        son panier.
+        L'utilisateur doit être connecté pour payer son panier.
+        L'utilisateur ne peut pas payer le panier d'un autre utilisateur.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayRequest'
+      responses:
+        '201':
+          description: La confirmation ou infirmation du paiement de l'utilisateur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schema/PayResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/schemas/Unauthorized' }
+        '403': { $ref: '#/components/schemas/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
 
-  # POST /carts/{id}/items
-  #   Ajouter un lancer au panier, avec un nombre de places.
-  #   L'écran de panier doit pouvoir se peindre à partir de cette seule
-  #   réponse, sans second appel. Le total est calculé par le serveur.
-
-  # DELETE /carts/{id}/items/{itemId}
-  #   Retirer une ligne du panier. Si c'était la dernière, le panier disparaît
-  #   côté serveur — le voyageur n'a rien à faire de plus.
-
-  # POST /carts/{id}/pay
-  #   Payer le panier : il passe de `pending` à `paid` et les billets sont
-  #   émis, un par place réservée. Aucune donnée bancaire ne circule : on
-  #   déclare un moyen de paiement, rien de plus.
-  #   L'écran de confirmation doit pouvoir se peindre à partir de cette seule
-  #   réponse. Que se passe-t-il si le panier est déjà payé ?
-
-  # ---- Billets (authentifié) -----------------------------------------------
-
-  # GET /tickets
-  #   Lister les billets du voyageur connecté. Un billet est un droit à
-  #   embarquer sur un lancer : il n'est pas nominatif, il vaut pour une
-  #   place et non pour une personne désignée.
+  /tickets:
+    get:
+      tags: [Billets]
+      operationId: getTickets
+      summary: Lister les billets de l'utilisateur
+      description: |
+        Liste les billets de l'utilisateur connecté. Un billet n'est pas
+        nominatif, c'est un droit à embarquer sur un lancer.
+        Un billet vaut pour une place.
+        L'utilisateur doit être connecté pour voir ses billets.
+        Un utilisateur ne peut pas voir les billets d'un autre.
+      responses:
+        '200':
+          description: Les billets de l'utilisateur connecté
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Ticket'
+        '401': { $ref: '#/components/schemas/Unauthorized' }
 
 components:
-  # ==========================================================================
-  #  FOURNI — Sécurité, erreurs, et schémas de l'authentification
-  #
-  #  Le schéma de sécurité et le format d'erreur sont posés : ils valent pour
-  #  toute l'API, y compris pour les opérations que vous allez écrire.
-  #  Servez-vous en (`$ref`), ne les redéfinissez pas.
-  # ==========================================================================
 
   securitySchemes:
     bearerAuth:
@@ -500,7 +705,7 @@ components:
         id:
           type: string
           format: uuid
-          example: 0e1f2a3b4c5d-8c9d-4a7b-5e6f-1a2b3c4d
+          example: 0e1f2a3b-8c9d-4a7b-5e6f-1a2b3c4d4c5d
         name:
           type: string
           example: Paris
@@ -508,22 +713,22 @@ components:
     TripSummary:
       type: object
       description: Les informations concernant un lancer, telles que l'on peut les voir sur la page de recherche des lancers avant d'en selectionner un
-      required: [id, beggining, ending, hour, duration, price]
+      required: [id, beginning, ending, date, duration, price]
       properties:
         id:
           type: string
           format: uuid
-          example: 0e1f2n9b4c5d-8c9d-4a7b-5e6f-1a2b3c4d
-        beggining:
+          example: 0e1f2e9b4c5d-8c9d-4a7b-5e6f-1a2b3c4d
+        beginning:
           type: string
           example: Paris
         ending:
           type: string
           example: Brest
-        hour:
+        date:
           type: string
-          format: time
-          example: '14:30:00'
+          format: date
+          example: '2027-02-14'
         duration:
           type: integer
           example: 20
@@ -559,10 +764,10 @@ components:
         status:
           type: string
           enum:
-            - en_attente
-            - reglé
-          default: reglé
-          example: en_attente
+            - pending
+            - paid
+          default: pending
+          example: pending
         lines:
           type: array
           description: Liste des lignes du panier de l'utilisateur
@@ -603,7 +808,7 @@ components:
         id:
           type: string
           format: uuid
-          example: 1a2cv34d-5e6f-4a7b-8c9d-0e1hua3b4c5d
+          example: 1a2ce34d-5e6f-4a7b-8c9d-0e1hea3b4c5d
         trip:
           type: string
           example: 0e1f2n9b4c5d-8c9d-4a7b-5e6f-1a2b3c4d
@@ -614,3 +819,39 @@ components:
           type: string
           format: date-time
           example: '2027-02-14T10:15:00Z'
+    
+    PayRequest:
+      type: object
+      description: Les informations de paiement du panier de l'utilisateur connecté
+      required: [id, cart, price, paymentMethod]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 1a2ce84d-5e6f-4a7b-8c9d-0e1hea3b4c5d
+        cart:
+          type: string
+          example: 0e1f2a3b4c5d-8c9d-4a7b-5e67-1a2b3c4d
+        price:
+          type: integer
+          minimum: 1
+          example: 150
+        paymentMethod:
+          type: string
+          enum:
+            - card
+            - voucher
+          default: card
+          example: card
+    PayResponse:
+      type: object
+      description: La réponse suite au paiement du panier de l'utilisateur connecté
+      required: [id, paymentConfirmed]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 0e1f2a7b4c5d-8c9d-4a7b-5e67-1a2b3c4d
+        paymentConfirmed:
+          type: boolean
+          example: true

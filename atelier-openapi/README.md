@@ -83,3 +83,9 @@ Vous pouvez importer `openapi.yaml` dans Bruno pour générer votre collection :
 requêtes viennent de votre propre contrat.
 
 N'écrivez pas les douze opérations avant de tester la première.
+
+## Usage de l'IA
+
+- IA utilisée pour consulter les différents types de données et formattages pour créer les ```properties``` des schémas
+- IA utilisée pour vérifier comment renvoyer une liste d'objet suite à une requête GET
+- IA utilisée pour apprendre comment passer un paramètre en query pour une requête GET
