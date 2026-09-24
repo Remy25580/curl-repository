@@ -492,24 +492,125 @@ components:
     #    - Une valeur n'a-t-elle qu'un jeu de possibilités connu d'avance ?
     # ==========================================================================
 
-    # City
-    #   Une ville desservie. Chaque ville possède une catapulte unique en son
-    #   centre, qui sert à la fois de point de lancement et de réception.
+    City:
+      type: object
+      description: Une ville déservie par le service Catapulte Connect.
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 0e1f2a3b4c5d-8c9d-4a7b-5e6f-1a2b3c4d
+        name:
+          type: string
+          example: Paris
 
-    # TripSummary
-    #   Un lancer tel qu'il apparaît dans une liste de résultats : de quoi
-    #   choisir, pas de quoi préparer son voyage.
+    TripSummary:
+      type: object
+      description: Les informations concernant un lancer, telles que l'on peut les voir sur la page de recherche des lancers avant d'en selectionner un
+      required: [id, beggining, ending, hour, duration, price]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 0e1f2n9b4c5d-8c9d-4a7b-5e6f-1a2b3c4d
+        beggining:
+          type: string
+          example: Paris
+        ending:
+          type: string
+          example: Brest
+        hour:
+          type: string
+          format: time
+          example: '14:30:00'
+        duration:
+          type: integer
+          example: 20
+        price:
+          type: integer
+          example: 50
+      
+    TripDetail:
+      description: Les informations détaillées d'un lancer telles que l'on peut les voir après avoir cliqué sur un lancer avant de le réserver
+      allOf:
+        - $ref: '#/components/schemas/TripSummary'
+        - type: object
+          properties:
+            massFranchising:
+              type: integer
+              example: 120
+            catapultModel:
+              type: string
+              example: Torsion
+            boardingInstructions:
+              type: string
+              example: "Merci de garder les bras et les jambes à l'interieur de la nacelle pendant le vol"
 
-    # TripDetail
-    #   Le même lancer, consulté seul. Il ajoute ce dont on a besoin une fois
-    #   qu'on l'a choisi — notamment la franchise de masse, qui n'est pas ici
-    #   une limite commerciale mais balistique.
+    Cart:
+      type: object
+      description: Le panier de l'utilisateur. Contient les lancers que l'utilisateur doit rêgler
+      required: [id, status, lines, totalPrice, openingDate]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 0e1f2a3b4c5d-8c9d-4a7b-5e67-1a2b3c4d
+        status:
+          type: string
+          enum:
+            - en_attente
+            - reglé
+          default: reglé
+          example: en_attente
+        lines:
+          type: array
+          description: Liste des lignes du panier de l'utilisateur
+          items:
+            $ref: '#/components/schemas/CartItem'
+        totalPrice:
+          type: integer
+          example: 150
+        openingDate:
+          type: string
+          format: date-time
+          example: '2027-02-14T10:03:00Z'
 
-    # Cart
-    #   Un panier de réservation. Il connaît son état, ses lignes, et son total.
+    CartItem:
+      type: objet
+      description: Une ligne dans le panier de l'utilisateur, correspondant à un lancer et un nombre de places
+      required: [id, trip, travelersNumber, subTotalPrice]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 1a2cv34d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+        trip:
+          type: string
+          example: 0e1f2n9b4c5d-8c9d-4a7b-5e6f-1a2b3c4d
+        travelersNumber: 
+          type: integer
+          example: 3
+        subTotalPrice:
+          type: integer
+          example: 50
 
-    # CartItem
-    #   Une ligne de panier : un lancer et un nombre de places.
-
-    # Ticket
-    #   Un droit à embarquer sur un lancer, émis au paiement. Un par place.
+    Ticket:
+      type: object
+      description: Un droit à embarquer sur un lancer, émis au paiement. Un par place
+      required: [id, trip, paidPrice, releaseDate]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 1a2cv34d-5e6f-4a7b-8c9d-0e1hua3b4c5d
+        trip:
+          type: string
+          example: 0e1f2n9b4c5d-8c9d-4a7b-5e6f-1a2b3c4d
+        paidPrice:
+          type: integer
+          example: 150
+        releaseDate:
+          type: string
+          format: date-time
+          example: '2027-02-14T10:15:00Z'
